@@ -25,7 +25,6 @@
 			<groupId>javax.servlet</groupId>
 			<artifactId>jstl</artifactId>
 		</dependency>
-
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-tomcat</artifactId>
@@ -36,19 +35,15 @@
 			<artifactId>tomcat-embed-jasper</artifactId>
 			<scope>provided</scope>
 		</dependency>
-
-
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-data-jpa</artifactId>
 		</dependency>
-
 		<dependency>
 			<groupId>mysql</groupId>
 			<artifactId>mysql-connector-java</artifactId>
 			<!-- <scope>runtime</scope> -->
 		</dependency>
-
 
 		<!-- Test -->
 		<dependency>
@@ -57,7 +52,19 @@
 			<scope>test</scope>
 		</dependency>
 	</dependencies>
+
 	<build>
 		<finalName>simple_web_app</finalName>
 	</build>
+
+	<distributionManagement>
+		<repository>
+			<id>enac_maven_repo.write</id>
+			<url>https://mymavenrepo.com/repo/0t5IYN8DaY1S2ZouIsuB/</url>
+		</repository>
+		<snapshotRepository>
+			<id>enac_maven_repo.write</id>
+			<url>https://mymavenrepo.com/repo/0t5IYN8DaY1S2ZouIsuB/</url>
+		</snapshotRepository>
+	</distributionManagement>
 </project>
