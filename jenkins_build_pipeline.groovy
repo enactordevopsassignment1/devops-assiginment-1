@@ -3,14 +3,18 @@ pipeline {
     stages {
         stage('Checkout simple_web_app') {
             steps {
-                checkout([$class: 'GitSCM', branches: [[name: '*/master']], doGenerateSubmoduleConfigurations: false, extensions: [], submoduleCfg: [], userRemoteConfigs: [[credentialsId: '58fcf397-774b-4287-ad40-49b88de738fb', url: 'https://github.com/enactordevopsassignment1/devops-assiginment-1.git']]])
+                retry(3) {
+                    checkout([$class: 'GitSCM', branches: [[name: '*/master']], doGenerateSubmoduleConfigurations: false, extensions: [], submoduleCfg: [], userRemoteConfigs: [[credentialsId: '58fcf397-774b-4287-ad40-49b88de738fb', url: 'https://github.com/enactordevopsassignment1/devops-assiginment-1.git']]])
+                }
             }
         }
         stage('Build and deploy simple_web_app'){
             steps{
                 dir('simple_web_app') {
                     // Run the maven build and upload artifacts
-                    sh 'mvn clean deploy'
+                    retry(3){
+                        sh 'mvn clean deploy'
+                    }
                 }
             }
         }
@@ -18,10 +22,11 @@ pipeline {
             steps {
                 script {
                     def docker_image = docker.build("madumalt/simple_web_app")
-
-                    docker.withRegistry('https://registry.hub.docker.com', 'docker-hub-credentials') {
-                        docker_image.push("${env.BUILD_TIMESTAMP}")
-                        docker_image.push("latest")
+                    retry(3) {
+                        docker.withRegistry('https://registry.hub.docker.com', 'docker-hub-credentials') {
+                            docker_image.push("${env.BUILD_TIMESTAMP}")
+                            docker_image.push("latest")
+                        }
                     }
                 }
             }
