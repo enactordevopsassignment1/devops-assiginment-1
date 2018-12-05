@@ -2,7 +2,12 @@ def image_version
 def image = "madumalt/simple_web_app"
 
 def stack_name = 'test-deployment-stack'
-def deployment_stack_details
+def instance_details = [:]
+def instance_public_dns
+
+def private_key = '/var/lib/jenkins/.ssh/enactor-devops-2'
+def docker_setup_script = 'setup_docker_n_docker_compose.sh'
+def docker_compose_service_script = 'docker-compose.yml'
 
 def AWS_CLI_FALSE_STATE = 255
 
@@ -42,22 +47,44 @@ pipeline {
                 echo "Successfully deployed ${stack_name}."
 
                 script {
-                    deployment_stack_details = sh(
+                    def deployment_stack_details = sh(
                             script: "aws cloudformation describe-stacks --stack-name ${stack_name}",
                             returnStdout: true
                     ).trim()
-                    echo "${deployment_stack_details}"
+                    def json_dsd = jsonParse(deployment_stack_details)
+                    def output_array = json_dsd.Stacks[0].Outputs
+                    output_array.each {
+                        instance_details << [(it.OutputKey): it.OutputValue]
+                        if (it.OutputKey.toString() == 'PublicDNS') {
+                            instance_public_dns = it.OutputValue.toString()
+                        }
+                    }
+                    echo "${instance_public_dns}"
+                    echo "${instance_details}"
                 }
             }
         }
-        stage('Setup docker and docker-compose instances within the stack instance.') {
+        stage('Setup docker and docker-compose, and Deploy simple_web_app within the new instance.') {
             steps {
-                sleep(1)
-            }
-        }
-        stage('Deploy the simple_web_app in the stack instance.') {
-            steps {
-                sleep(1)
+                script {
+                    def ssh_cmd = "ssh -i ${private_key} -o StrictHostKeyChecking=no ec2-user@${instance_public_dns}"
+                    sh "${ssh_cmd} 'ls -alF'"
+
+                    // Copy setup_docker_n_docker_compose.sh file to the new instance.
+                    sh "scp -i ${private_key} ${docker_setup_script} ec2-user@${instance_public_dns}:/home/ec2-user/"
+
+                    // Copy docker-compose.ym file to the new instance.
+                    sh "scp -i ${private_key} ${docker_compose_service_script} ec2-user@${instance_public_dns}:/home/ec2-user/"
+
+                    // Make setup_docker_n_docker_compose.sh file an executable.
+                    sh "${ssh_cmd} 'chmod +x ${docker_setup_script}'"
+
+                    // Run setup_docker_n_docker_compose.sh.
+                    sh "${ssh_cmd} './${docker_setup_script}'"
+
+                    // Deploy simple_web_app using docker-compose.
+                    sh "${ssh_cmd} 'nohup docker-compose up &'"
+                }
             }
         }
         stage('Test the deployed simple_web_app.') {
