@@ -1,0 +1,117 @@
+def image_version
+def image = "madumalt/simple_web_app"
+
+def stack_name = 'test-deployment-stack'
+def deployment_stack_details
+
+def AWS_CLI_FALSE_STATE = 255
+
+pipeline {
+    agent any
+    stages {
+        stage('Choose a DockerTag') {
+            steps {
+                script {
+                    def url_v1 = "https://registry.hub.docker.com/v1/repositories/${image}/tags"
+                    def list = getDockerImageTags(url_v1)
+                    def versions = list.join("\n")
+                    image_version = input(
+                            id: 'userInput', message: 'Promote:', parameters: [
+                            [$class: 'ChoiceParameterDefinition', choices: versions, description: 'Versions', name: 'version']]
+                    )
+                }
+            }
+        }
+        stage('Checkout docker-compose service script') {
+            steps {
+                retry(3) {
+                    checkout([$class: 'GitSCM', branches: [[name: '*/master']], doGenerateSubmoduleConfigurations: false, extensions: [], submoduleCfg: [], userRemoteConfigs: [[credentialsId: '58fcf397-774b-4287-ad40-49b88de738fb', url: 'https://github.com/enactordevopsassignment1/docker-compose-simple-web-app.git']]])
+                }
+            }
+        }
+        stage('Deploy a stack using aws cloudformation.') {
+            steps {
+                echo "Proceeding with ${image}:${image_version}."
+                sh 'aws cloudformation describe-stacks'
+
+                echo "Starting the deployment of ${stack_name}."
+                sh "aws cloudformation create-stack --template-body file://${pwd()}/aws_stack.json --stack-name ${stack_name}"
+
+                echo "Waiting till stack deployment of ${stack_name} completes."
+                sh "aws cloudformation wait stack-create-complete --stack-name ${stack_name}"
+                echo "Successfully deployed ${stack_name}."
+
+                script {
+                    deployment_stack_details = sh(
+                            script: "aws cloudformation describe-stacks --stack-name ${stack_name}",
+                            returnStdout: true
+                    ).trim()
+                    echo "${deployment_stack_details}"
+                }
+            }
+        }
+        stage('Setup docker and docker-compose instances within the stack instance.') {
+            steps {
+                sleep(1)
+            }
+        }
+        stage('Deploy the simple_web_app in the stack instance.') {
+            steps {
+                sleep(1)
+            }
+        }
+        stage('Test the deployed simple_web_app.') {
+            steps {
+                sleep(1)
+            }
+        }
+    }
+    post {
+        always {
+            echo "Deleting the ${stack_name}."
+
+            script{
+                def stack_exists = false
+                try{
+                    stack_exists = sh(
+                            script: "aws cloudformation wait stack-exists --stack-name ${stack_name}",
+                            returnStatus: true
+                    ) != AWS_CLI_FALSE_STATE
+                } catch(err){
+                    stack_exists = false
+                    echo "${err}"
+                }
+
+                echo "The ${stack_name} exists ? ${stack_exists}"
+
+                if (stack_exists) {
+                    retry(3){
+                        sh "aws cloudformation delete-stack --stack-name ${stack_name}"
+                    }
+                    sh "aws cloudformation wait stack-delete-complete --stack-name ${stack_name}"
+                }
+            }
+            echo "Successfully deleted the ${stack_name}."
+        }
+    }
+}
+
+def getDockerImageTags(url) {
+    def myjson = getUrl(url)
+    def results = jsonParse(myjson)
+    def tags = []
+    results.each {
+        tags << it.name
+    }
+    tags
+}
+
+def jsonParse(json) {
+    new groovy.json.JsonSlurper().parseText(json)
+}
+
+def getUrl(url) {
+    sh(returnStdout: true, script: "curl -s ${url} 2>&1 | tee result.json")
+    def data = readFile('result.json').trim()
+    data
+}
