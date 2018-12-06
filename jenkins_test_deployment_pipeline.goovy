@@ -96,10 +96,10 @@ pipeline {
         stage('Test the deployed simple_web_app.') {
             steps {
                 retry(3) {
-                    sh "curl 'http://${instance_public_dns}:8080/simple_web_app/'"
+                    sh "curl -L 'http://${instance_public_dns}:8080/simple_web_app/'"
                 }
                 retry(3) {
-                    sh "curl 'http://${instance_public_dns}:8080/simple_web_app/rememberme/'"
+                    sh "curl -L 'http://${instance_public_dns}:8080/simple_web_app/rememberme/'"
                 }
             }
         }
