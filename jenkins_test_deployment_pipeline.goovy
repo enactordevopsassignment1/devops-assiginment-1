@@ -11,6 +11,7 @@ def docker_compose_service_script = 'docker-compose.yml'
 def mysq_schema_script = 'simple_db.sql'
 
 def AWS_CLI_FALSE_STATE = 255
+def SUCCESS_STATUS = 200
 
 pipeline {
     agent any
@@ -69,6 +70,7 @@ pipeline {
             steps {
                 script {
                     def ssh_cmd = "ssh -i ${private_key} -o StrictHostKeyChecking=no ec2-user@${instance_public_dns}"
+                    sh "${ssh_cmd} 'ls -alF'"
 
                     // Copy setup_docker_n_docker_compose.sh file to the new instance.
                     sh "scp -i ${private_key} ${docker_setup_script} ec2-user@${instance_public_dns}:/home/ec2-user/"
@@ -90,16 +92,25 @@ pipeline {
 
                     // See what are the containers running.
                     sh "${ssh_cmd} 'docker ps -a'"
+
+                    // Sleep for 20s to give some time for the new instance to settle down. Otherwise Rest Calls fail.
+                    sleep(20)
                 }
             }
         }
         stage('Test the deployed simple_web_app.') {
             steps {
-                retry(3) {
-                    sh "curl -L 'http://${instance_public_dns}:8080/simple_web_app/'"
-                }
-                retry(3) {
-                    sh "curl -L 'http://${instance_public_dns}:8080/simple_web_app/rememberme/'"
+                script {
+                    retry(3){
+                        def response = httpRequest url: "http://${instance_public_dns}:8080/simple_web_app/"
+                        echo "${response}"
+                        assert response.status == SUCCESS_STATUS : "Response status code should be ${SUCCESS_STATUS}"
+                    }
+                    retry(3){
+                        def response = httpRequest url: "http://${instance_public_dns}:8080/simple_web_app/rememberme/"
+                        echo "${response}"
+                        assert response.status == SUCCESS_STATUS : "Response status code should be ${SUCCESS_STATUS}"
+                    }
                 }
             }
         }
