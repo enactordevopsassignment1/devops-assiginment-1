@@ -8,6 +8,7 @@ def instance_public_dns
 def private_key = '/var/lib/jenkins/.ssh/enactor-devops-2'
 def docker_setup_script = 'setup_docker_n_docker_compose.sh'
 def docker_compose_service_script = 'docker-compose.yml'
+def mysq_schema_script = 'simple_db.sql'
 
 def AWS_CLI_FALSE_STATE = 255
 
@@ -68,10 +69,12 @@ pipeline {
             steps {
                 script {
                     def ssh_cmd = "ssh -i ${private_key} -o StrictHostKeyChecking=no ec2-user@${instance_public_dns}"
-                    sh "${ssh_cmd} 'ls -alF'"
 
                     // Copy setup_docker_n_docker_compose.sh file to the new instance.
                     sh "scp -i ${private_key} ${docker_setup_script} ec2-user@${instance_public_dns}:/home/ec2-user/"
+
+                    // Copy simple_db.sql mysql schema script file to the new instance.
+                    sh "scp -i ${private_key} ${mysq_schema_script} ec2-user@${instance_public_dns}:/home/ec2-user/"
 
                     // Copy docker-compose.ym file to the new instance.
                     sh "scp -i ${private_key} ${docker_compose_service_script} ec2-user@${instance_public_dns}:/home/ec2-user/"
@@ -83,13 +86,21 @@ pipeline {
                     sh "${ssh_cmd} './${docker_setup_script}'"
 
                     // Deploy simple_web_app using docker-compose.
-                    sh "${ssh_cmd} 'nohup docker-compose up &'"
+                    sh "${ssh_cmd} 'docker-compose up -d'"
+
+                    // See what are the containers running.
+                    sh "${ssh_cmd} 'docker ps -a'"
                 }
             }
         }
         stage('Test the deployed simple_web_app.') {
             steps {
-                sleep(1)
+                retry(3) {
+                    sh "curl 'http://${instance_public_dns}:8080/simple_web_app/'"
+                }
+                retry(3) {
+                    sh "curl 'http://${instance_public_dns}:8080/simple_web_app/rememberme/'"
+                }
             }
         }
     }
@@ -119,6 +130,9 @@ pipeline {
                 }
             }
             echo "Successfully deleted the ${stack_name}."
+        }
+        failure {
+            emailext attachLog: true, body: '''Please see the attached log. Thanks.''', subject: '[Jenkins][simple_web_app] Deployment Test      Failure', to: 'madumalt@gmail.com,thilina.11@cse.mrt.ac.lk'
         }
     }
 }
